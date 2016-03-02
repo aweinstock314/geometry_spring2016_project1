@@ -3,11 +3,12 @@ extern crate glium;
 extern crate cgmath;
 
 use glium::{DisplayBuild, Surface};
-use glium::glutin::Event;
+use glium::glutin::{Event, ElementState, VirtualKeyCode};
 use std::time::Duration;
 use std::f32::consts::PI;
 use cgmath::{EuclideanVector, Point, Rotation, Rotation3, SquareMatrix};
 use cgmath::{Basis3, Matrix3, Matrix4, Point3, Vector3, rad};
+use std::collections::HashSet;
 
 const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
@@ -97,9 +98,9 @@ fn main() {
     let vertex_shader_src = r#"
         #version 130
         in vec3 position;
-        uniform mat4 perspective;
+        uniform mat4 matrix;
         void main() {
-            gl_Position = perspective * vec4(position, 1.0);
+            gl_Position = matrix * vec4(position, 1.0);
         }
     "#;
     let fragment_shader_src = r#"
@@ -113,6 +114,10 @@ fn main() {
     let (mut x, mut y, mut z) = (1.0, 1.0, -1.0);
     let (mut theta, mut phi) = (0.0, 0.0);
 
+    let mut held_keys = HashSet::new();
+    let movement_delta = 0.05;
+    let rotation_delta = 0.01;
+
     'outer: loop {
         //println!("{}, {}, {}", x, y, z);
         //println!("{}, {}", theta, phi);
@@ -120,17 +125,29 @@ fn main() {
             //println!("Got an event: {:?}", e);
             match e {
                 Event::Closed => break 'outer,
-                Event::ReceivedCharacter('a') => x += 0.1,
-                Event::ReceivedCharacter('d') => x -= 0.1,
-                Event::ReceivedCharacter('w') => z += 0.1,
-                Event::ReceivedCharacter('s') => z -= 0.1,
-                Event::ReceivedCharacter('q') => y += 0.1,
-                Event::ReceivedCharacter('e') => y -= 0.1,
+                Event::KeyboardInput(ElementState::Pressed, _, Some(c)) => { held_keys.insert(c); },
+                Event::KeyboardInput(ElementState::Released, _, Some(c)) => { held_keys.remove(&c); },
+                _ => (),
+            }
+        }
+        fn app_polar(x: &mut f32, z: &mut f32, m: f32, r: f32) {
+            *x += m * r.cos();
+            *z += m * r.sin();
+        }
+        for key in &held_keys {
+            match *key {
+                VirtualKeyCode::A => app_polar(&mut x, &mut z,  movement_delta, phi),
+                VirtualKeyCode::D => app_polar(&mut x, &mut z, -movement_delta, phi),
+                VirtualKeyCode::W => app_polar(&mut x, &mut z,  movement_delta, phi + TAU/4.0),
+                VirtualKeyCode::S => app_polar(&mut x, &mut z, -movement_delta, phi + TAU/4.0),
 
-                Event::ReceivedCharacter('i') => theta -= 0.1,
-                Event::ReceivedCharacter('k') => theta += 0.1,
-                Event::ReceivedCharacter('j') => phi -= 0.1,
-                Event::ReceivedCharacter('l') => phi += 0.1,
+                VirtualKeyCode::Q => y += movement_delta,
+                VirtualKeyCode::E => y -= movement_delta,
+
+                VirtualKeyCode::I => theta -= rotation_delta,
+                VirtualKeyCode::K => theta += rotation_delta,
+                VirtualKeyCode::J => phi -= rotation_delta,
+                VirtualKeyCode::L => phi += rotation_delta,
                 _ => (),
             }
         }
@@ -157,9 +174,9 @@ fn main() {
             }
         });
         let translation: Matrix4<f32> = Matrix4::from_translation((x, y, z).into());
-        let rotation: Matrix4<f32> = Matrix3::from_euler(rad(theta), rad(phi), rad(0.0)).into();
-        let perspective: [[f32; 4]; 4] = (perspective * rotation * translation).into();
-        let uniforms = uniform! { perspective: perspective };
+        let rotation: Matrix4<f32> = (Matrix3::from_angle_x(rad(theta)) * Matrix3::from_angle_y(rad(phi))).into();
+        let matrix: [[f32; 4]; 4] = (perspective * rotation * translation).into();
+        let uniforms = uniform! { matrix: matrix };
         frame.draw(&vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
         frame.finish().unwrap();
 
