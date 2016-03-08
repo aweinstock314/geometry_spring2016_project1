@@ -14,11 +14,14 @@ const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
 
 #[derive(Copy, Clone, Debug)]
-struct Vertex3d { position: [f32; 3] }
-implement_vertex!(Vertex3d, position);
+struct Vertex3d { position: [f32; 3], vcolor: [f32; 3] }
+implement_vertex!(Vertex3d, position, vcolor);
 
 macro_rules! v3 {
-    ($x:expr, $y:expr, $z:expr) => { Vertex3d { position: [$x, $y, $z] } }
+    ($x:expr, $y:expr, $z:expr) => { Vertex3d {
+        position: [$x, $y, $z],
+        vcolor: [0.0, 1.0, 0.0],
+    } }
 }
 
 fn mapslice<X: Copy, Y, F: Fn(X) -> Y>(f: F, x: [X; 3]) -> [Y; 3] {
@@ -31,13 +34,13 @@ fn triangle_in_plane(theta: f32) -> [Vertex3d; 3] {
     mapslice(|x| g(f(x)), [0.0, 1.0/3.0, 2.0/3.0])
 }
 
-fn triangle_normal_to_vector(v: Vector3<f32>) -> [Vertex3d; 3] {
+fn triangle_normal_to_vector(v: Vector3<f32>, color: [f32; 3]) -> [Vertex3d; 3] {
     // there are infinitely many perpendicular vectors to a given vector
     // so pick an arbitrary one by crossing a vector with one not-parallel to it
     let q = Vector3::unit_x() + Vector3::unit_y() + Vector3::unit_z();
     let u = (v - q).cross(v);
     let r = Basis3::from_axis_angle(v, rad(TAU/3.0));
-    let f = |x: Vector3<f32>| Vertex3d { position: x.into() };
+    let f = |x: Vector3<f32>| Vertex3d { position: x.into(), vcolor: color };
     let tmp = mapslice(f, [u, r.rotate_vector(u), r.invert().rotate_vector(u)]);
     //println!("{:?}", tmp);
     tmp
@@ -98,16 +101,20 @@ fn main() {
     let vertex_shader_src = r#"
         #version 130
         in vec3 position;
+        in vec3 vcolor;
+        out vec3 fcolor;
         uniform mat4 matrix;
         void main() {
+            fcolor = vcolor;
             gl_Position = matrix * vec4(position, 1.0);
         }
     "#;
     let fragment_shader_src = r#"
         #version 130
+        in vec3 fcolor;
         out vec4 color;
         void main() {
-            color = vec4(0.0, 1.0, 1.0, 1.0);
+            color = vec4(fcolor, 1.0);
         }
     "#;
     let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
@@ -150,6 +157,7 @@ fn main() {
                 VirtualKeyCode::L => phi += rotation_delta,
                 _ => (),
             }
+            theta = theta.min(TAU/4.0).max(-TAU/4.0);
         }
         t += delta;
         if t < EPSILON || (t - 1.0).abs() < EPSILON {
@@ -158,9 +166,9 @@ fn main() {
         let mut frame = display.draw();
         frame.clear_color(0.0, 0.0, 0.0, 1.0);
         let mut mutable_buffer = vec![];
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x()));
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y()));
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z()));
+        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
+        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
+        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
         //mutable_buffer.extend_from_slice(&triangle_in_plane(t*TAU));
         //let vertex_buffer = glium::VertexBuffer::new(&display, &triangle_in_plane(t*TAU)).unwrap();
         let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
