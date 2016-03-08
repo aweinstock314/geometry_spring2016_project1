@@ -46,6 +46,25 @@ fn triangle_normal_to_vector(v: Vector3<f32>, color: [f32; 3]) -> [Vertex3d; 3] 
     tmp
 }
 
+fn append_path_to_buf<S: SurfaceCurve>(v: &mut Vec<Vertex3d>, r: &S, t0: f32, t1: f32, dt: f32, color: [f32; 3]) {
+    // "tube" as a surface patch, from "Elemental Differential Geometry, 2nd Edition" 4.2.7
+    let sigma = |s, theta: f32| {
+        let radius = 0.1;
+        let (tangent, normal, binormal) = frenet_frame(r, s);
+        r.r(s) + (normal * theta.cos() + binormal * theta.sin())*radius
+    };
+    let mut t = t0;
+    while t < t1 {
+        for i in 0..3 {
+            v.push(Vertex3d {
+                position: sigma(t, TAU * (i as f32) / 3.0).into(),
+                vcolor: color,
+            });
+        }
+        t += dt;
+    }
+}
+
 trait SurfaceCurve {
     fn r(&self, t: f32) -> Point3<f32>;
     fn r1(&self, t: f32) -> Point3<f32>;
@@ -79,11 +98,11 @@ impl SurfaceCurve for Ellipse {
     }
 }
 
-fn frenet_frame<C: SurfaceCurve>(c: C, s: f32) -> [Vector3<f32>; 3] {
+fn frenet_frame<C: SurfaceCurve>(c: &C, s: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let t = c.r1(s).to_vec().normalize();
     let n = c.r2(s).to_vec().normalize();
     let b = t.cross(n);
-    [t, n, b]
+    (t, n, b)
 }
 
 fn main() {
@@ -169,8 +188,11 @@ fn main() {
         mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
         mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
         mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
+        append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, 0.01, [1.0, 1.0, 1.0]);
+
         //mutable_buffer.extend_from_slice(&triangle_in_plane(t*TAU));
         //let vertex_buffer = glium::VertexBuffer::new(&display, &triangle_in_plane(t*TAU)).unwrap();
+
         let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
         let perspective = Matrix4::<f32>::from({
             let (width, height) = frame.get_dimensions();
