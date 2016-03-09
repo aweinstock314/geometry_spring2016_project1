@@ -1,6 +1,7 @@
 #[macro_use] extern crate glium;
 extern crate cgmath;
 extern crate hyper;
+extern crate serde_json;
 
 use cgmath::{Basis3, Matrix3, Matrix4, Point3, Vector3, rad};
 use cgmath::{EuclideanVector, Point, Rotation, Rotation3, SquareMatrix};
@@ -8,9 +9,9 @@ use glium::glutin::{Event, ElementState, VirtualKeyCode};
 use glium::{DisplayBuild, Surface};
 use hyper::client::Client;
 use std::collections::HashSet;
+use std::error::Error;
 use std::f32::consts::PI;
 use std::time::Duration;
-use std::io::Read;
 
 const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
@@ -136,44 +137,46 @@ fn frenet_frame<C: SurfaceCurve>(c: &C, s: f32) -> (Vector3<f32>, Vector3<f32>, 
 struct StaticCurve {
     t0: f32,
     dt: f32,
-    points: Vec<[Point3<f32>; 3]>,
+    d0: Vec<Point3<f32>>,
+    d1: Vec<Point3<f32>>,
+    d2: Vec<Point3<f32>>,
 }
 
 impl StaticCurve {
-    fn sample(&self, t: f32) -> Option<&[Point3<f32>; 3]> {
+    fn sample<T: Clone>(&self, v: &Vec<T>, t: f32) -> Option<T> {
         let i = ((t - self.t0)/self.dt) as usize;
-        self.points.get(i)
+        v.get(i).map(|p| p.clone())
     }
 }
 
 impl SurfaceCurve for StaticCurve {
     fn r(&self, t: f32) -> Point3<f32> {
-        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r", t))[0]
+        self.sample(&self.d0, t).expect(&format!("t={} is out of bounds for StaticCurve::r", t))
     }
     fn r1(&self, t: f32) -> Point3<f32> {
-        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r1", t))[1]
+        self.sample(&self.d1, t).expect(&format!("t={} is out of bounds for StaticCurve::r1", t))
     }
     fn r2(&self, t: f32) -> Point3<f32> {
-        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r2", t))[2]
+        self.sample(&self.d2, t).expect(&format!("t={} is out of bounds for StaticCurve::r2", t))
     }
 }
 
-/*fn static_curve_over_http(curve_id: usize, t0: f32, t1: f32, dt: f32) -> StaticCurve {
+fn static_curve_over_http(host: &str, curve_id: usize, t0: f32, t1: f32, dt: f32) -> Result<StaticCurve, Box<Error>> {
     let client = Client::new();
-    //match client.post("http://localhost:9001").body(&format!("ID={}&order={}&tstart={}&tend={}&dt={}",0,0,0, TAU, TAU/20.0)).send() {
-    match client.get(&format!("{}/points?ID={}&order={}&tstart={}&tend={}&dt={}", "http://localhost:9001", 0, 0, 0, TAU, TAU/20.0)).send() {
-    //match client.get("http://rpis.ec/").send() {
-        Ok(mut result) => {
-            let mut tmp = "".to_owned();
-            if let Ok(_) = result.read_to_string(&mut tmp) {
-                println!("{:?}", tmp);
-            } else {
-                println!("inner failed");
-            }
-        },
-        Err(e) => println!("outer failed: {:?}", e),
-    }
-}*/
+    let fetch_nth_derivative = |n: usize| -> Result<Vec<Point3<f32>>, Box<Error>> {
+        let jsonblob = try!(client.get(&format!("{}/points?ID={}&order={}&tstart={}&tend={}&dt={}", host, curve_id, 0, t0, t1, dt)).send());
+        let points: Vec<[f32; 3]> = try!(serde_json::de::from_reader(jsonblob));
+        let points: Vec<Point3<f32>> = points.into_iter().map(|p| p.into()).collect();
+        Ok(points)
+    };
+    Ok(StaticCurve {
+        t0: t0,
+        dt: dt,
+        d0: try!(fetch_nth_derivative(0)),
+        d1: try!(fetch_nth_derivative(1)),
+        d2: try!(fetch_nth_derivative(2)),
+    })
+}
 
 fn main() {
     let display = glium::glutin::WindowBuilder::new()
