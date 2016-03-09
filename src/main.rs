@@ -1,14 +1,16 @@
-#[macro_use]
-extern crate glium;
+#[macro_use] extern crate glium;
 extern crate cgmath;
+extern crate hyper;
 
-use glium::{DisplayBuild, Surface};
-use glium::glutin::{Event, ElementState, VirtualKeyCode};
-use std::time::Duration;
-use std::f32::consts::PI;
-use cgmath::{EuclideanVector, Point, Rotation, Rotation3, SquareMatrix};
 use cgmath::{Basis3, Matrix3, Matrix4, Point3, Vector3, rad};
+use cgmath::{EuclideanVector, Point, Rotation, Rotation3, SquareMatrix};
+use glium::glutin::{Event, ElementState, VirtualKeyCode};
+use glium::{DisplayBuild, Surface};
+use hyper::client::Client;
 use std::collections::HashSet;
+use std::f32::consts::PI;
+use std::time::Duration;
+use std::io::Read;
 
 const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
@@ -132,6 +134,19 @@ fn frenet_frame<C: SurfaceCurve>(c: &C, s: f32) -> (Vector3<f32>, Vector3<f32>, 
 }
 
 fn main() {
+    let client = Client::new();
+    match client.get("http://rpis.ec").send() {
+        Ok(mut result) => {
+            let mut tmp = "".to_owned();
+            if let Ok(_) = result.read_to_string(&mut tmp) {
+                println!("{:?}", tmp);
+            } else {
+                println!("inner failed");
+            }
+        },
+        Err(e) => println!("outer failed: {:?}", e),
+    }
+
     let display = glium::glutin::WindowBuilder::new()
         .with_dimensions(640, 480)
         .with_title("Fun with Frenet Frames".to_string())
