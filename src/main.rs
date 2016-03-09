@@ -53,15 +53,41 @@ fn append_path_to_buf<S: SurfaceCurve>(v: &mut Vec<Vertex3d>, r: &S, t0: f32, t1
         let (tangent, normal, binormal) = frenet_frame(r, s);
         r.r(s) + (normal * theta.cos() + binormal * theta.sin())*radius
     };
+    let f = |t, i| { Vertex3d {
+        position: sigma(t, TAU * (i as f32) / 3.0).into(),
+        vcolor: color,
+    } };
     let mut t = t0;
     while t < t1 {
-        for i in 0..3 {
-            v.push(Vertex3d {
-                position: sigma(t, TAU * (i as f32) / 3.0).into(),
-                vcolor: color,
-            });
-        }
+        let (a, b, c) = (f(t, 0), f(t, 1), f(t, 2));
         t += dt;
+        let (x, y, z) = (f(t, 0), f(t, 1), f(t, 2));
+
+/*
+                x
+             --/\
+          --  /  \
+      a--    /____\
+      /\    z    -- y
+     /  \      --
+    /    \   --
+   /______\--
+  c        b
+
+*/
+        // The base
+        v.push(a); v.push(b); v.push(c);
+
+        // Each face as quads
+        v.push(a); v.push(x); v.push(b);
+        v.push(b); v.push(x); v.push(y);
+
+        v.push(a); v.push(x); v.push(c);
+        v.push(c); v.push(x); v.push(z);
+
+        v.push(b); v.push(y); v.push(c);
+        v.push(c); v.push(y); v.push(z);
+
     }
 }
 
@@ -144,6 +170,15 @@ fn main() {
     let movement_delta = 0.05;
     let rotation_delta = 0.01;
 
+    let mut mutable_buffer = vec![];
+    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
+    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
+    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
+    append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 1.0]);
+    append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 5.0, b: 4.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 0.0]);
+
+    let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
+
     'outer: loop {
         //println!("{}, {}, {}", x, y, z);
         //println!("{}, {}", theta, phi);
@@ -184,16 +219,6 @@ fn main() {
         }
         let mut frame = display.draw();
         frame.clear_color(0.0, 0.0, 0.0, 1.0);
-        let mut mutable_buffer = vec![];
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
-        mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
-        append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, 0.01, [1.0, 1.0, 1.0]);
-
-        //mutable_buffer.extend_from_slice(&triangle_in_plane(t*TAU));
-        //let vertex_buffer = glium::VertexBuffer::new(&display, &triangle_in_plane(t*TAU)).unwrap();
-
-        let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
         let perspective = Matrix4::<f32>::from({
             let (width, height) = frame.get_dimensions();
             cgmath::PerspectiveFov {
