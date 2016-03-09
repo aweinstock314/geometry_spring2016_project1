@@ -164,7 +164,7 @@ impl SurfaceCurve for StaticCurve {
 fn static_curve_over_http(host: &str, curve_id: usize, t0: f32, t1: f32, dt: f32) -> Result<StaticCurve, Box<Error>> {
     let client = Client::new();
     let fetch_nth_derivative = |n: usize| -> Result<Vec<Point3<f32>>, Box<Error>> {
-        let jsonblob = try!(client.get(&format!("{}/points?ID={}&order={}&tstart={}&tend={}&dt={}", host, curve_id, 0, t0, t1, dt)).send());
+        let jsonblob = try!(client.get(&format!("{}/points?ID={}&order={}&tstart={}&tend={}&dt={}", host, curve_id, n, t0, t1, dt)).send());
         let points: Vec<[f32; 3]> = try!(serde_json::de::from_reader(jsonblob));
         let points: Vec<Point3<f32>> = points.into_iter().map(|p| p.into()).collect();
         Ok(points)
@@ -223,7 +223,10 @@ fn main() {
     mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
     append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 1.0]);
     append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 5.0, b: 4.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 0.0]);
-
+    match static_curve_over_http("http://localhost:1337", 0, 0.0, TAU, 0.1) {
+        Ok(curve) => append_path_to_buf(&mut mutable_buffer, &curve, 0.0, TAU, 0.1, [1.0, 0.0, 1.0]),
+        Err(e) => println!("Failed to connect to the python: {}", e),
+    }
     let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
 
     'outer: loop {
