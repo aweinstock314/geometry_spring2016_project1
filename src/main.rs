@@ -133,9 +133,36 @@ fn frenet_frame<C: SurfaceCurve>(c: &C, s: f32) -> (Vector3<f32>, Vector3<f32>, 
     (t, n, b)
 }
 
-fn main() {
+struct StaticCurve {
+    t0: f32,
+    dt: f32,
+    points: Vec<[Point3<f32>; 3]>,
+}
+
+impl StaticCurve {
+    fn sample(&self, t: f32) -> Option<&[Point3<f32>; 3]> {
+        let i = ((t - self.t0)/self.dt) as usize;
+        self.points.get(i)
+    }
+}
+
+impl SurfaceCurve for StaticCurve {
+    fn r(&self, t: f32) -> Point3<f32> {
+        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r", t))[0]
+    }
+    fn r1(&self, t: f32) -> Point3<f32> {
+        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r1", t))[1]
+    }
+    fn r2(&self, t: f32) -> Point3<f32> {
+        self.sample(t).expect(&format!("t={} is out of bounds for StaticCurve::r2", t))[2]
+    }
+}
+
+/*fn static_curve_over_http(curve_id: usize, t0: f32, t1: f32, dt: f32) -> StaticCurve {
     let client = Client::new();
-    match client.get("http://rpis.ec").send() {
+    //match client.post("http://localhost:9001").body(&format!("ID={}&order={}&tstart={}&tend={}&dt={}",0,0,0, TAU, TAU/20.0)).send() {
+    match client.get(&format!("{}/points?ID={}&order={}&tstart={}&tend={}&dt={}", "http://localhost:9001", 0, 0, 0, TAU, TAU/20.0)).send() {
+    //match client.get("http://rpis.ec/").send() {
         Ok(mut result) => {
             let mut tmp = "".to_owned();
             if let Ok(_) = result.read_to_string(&mut tmp) {
@@ -146,7 +173,9 @@ fn main() {
         },
         Err(e) => println!("outer failed: {:?}", e),
     }
+}*/
 
+fn main() {
     let display = glium::glutin::WindowBuilder::new()
         .with_dimensions(640, 480)
         .with_title("Fun with Frenet Frames".to_string())
