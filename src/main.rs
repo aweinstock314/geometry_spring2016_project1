@@ -16,6 +16,8 @@ use std::time::Duration;
 const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
 
+const T_MAX: f32= 32.000084;
+
 #[derive(Copy, Clone, Debug)]
 struct Vertex3d { position: [f32; 3], vcolor: [f32; 3] }
 implement_vertex!(Vertex3d, position, vcolor);
@@ -249,8 +251,8 @@ fn main() {
 
     //append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 1.0]);
     //append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 5.0, b: 4.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 0.0]);
-    match static_curve_over_http("http://localhost:1337", 0, 0.0, TAU, 0.1) {
-        Ok(curve) => append_path_to_buf(&mut mutable_buffer, &curve, 0.0, TAU, 0.1, [1.0, 0.0, 1.0]),
+    match static_curve_over_http("http://localhost:1337", 0, 0.0, T_MAX, 0.1) {
+        Ok(curve) => append_path_to_buf(&mut mutable_buffer, &curve, 0.0, T_MAX, 0.1, [1.0, 0.0, 1.0]),
         Err(e) => println!("Failed to connect to the python: {}", e),
     }
     let vertex_buffer = glium::VertexBuffer::new(&display, &*mutable_buffer).unwrap();
