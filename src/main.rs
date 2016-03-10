@@ -127,6 +127,23 @@ impl SurfaceCurve for Ellipse {
     }
 }
 
+struct LineSegment {
+    p0: Point3<f32>,
+    v: Vector3<f32>,
+}
+
+impl SurfaceCurve for LineSegment {
+    fn r(&self, t: f32) -> Point3<f32> {
+        self.p0 + self.v*t
+    }
+    fn r1(&self, t: f32) -> Point3<f32> {
+        Point3::from_vec(self.v)
+    }
+    fn r2(&self, t: f32) -> Point3<f32> {
+        (1.0, 1.0, 1.0).into() // ugly hack to get axis showing up (doesn't work with 0)
+    }
+}
+
 fn frenet_frame<C: SurfaceCurve>(c: &C, s: f32) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
     let t = c.r1(s).to_vec().normalize();
     let n = c.r2(s).to_vec().normalize();
@@ -210,7 +227,7 @@ fn main() {
         }
     "#;
     let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
-    let (mut x, mut y, mut z) = (1.0, 1.0, -1.0);
+    let (mut x, mut y, mut z) = (-0.5, -0.5, -1.0);
     let (mut theta, mut phi) = (0.0, 0.0);
 
     let mut held_keys = HashSet::new();
@@ -218,11 +235,20 @@ fn main() {
     let rotation_delta = 0.01;
 
     let mut mutable_buffer = vec![];
-    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
-    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
-    mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
-    append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 1.0]);
-    append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 5.0, b: 4.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 0.0]);
+    //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
+    //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
+    //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
+
+    // hack due to borrowck issues using a lambda
+    let v = (1.0, 0.0, 0.0).into();
+    append_path_to_buf(&mut mutable_buffer, &LineSegment { p0: (0.0, 0.0, 0.0).into(), v: v }, 0.0, 1.0, 1.0, v.into());
+    let v = (0.0, 1.0, 0.0).into();
+    append_path_to_buf(&mut mutable_buffer, &LineSegment { p0: (0.0, 0.0, 0.0).into(), v: v }, 0.0, 1.0, 1.0, v.into());
+    let v = (0.0, 0.0, 1.0).into();
+    append_path_to_buf(&mut mutable_buffer, &LineSegment { p0: (0.0, 0.0, 0.0).into(), v: v }, 0.0, 1.0, 1.0, v.into());
+
+    //append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 2.0, b: 3.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 1.0]);
+    //append_path_to_buf(&mut mutable_buffer, &Ellipse { a: 5.0, b: 4.0 }, 0.0, TAU, TAU/20.0, [1.0, 1.0, 0.0]);
     match static_curve_over_http("http://localhost:1337", 0, 0.0, TAU, 0.1) {
         Ok(curve) => append_path_to_buf(&mut mutable_buffer, &curve, 0.0, TAU, 0.1, [1.0, 0.0, 1.0]),
         Err(e) => println!("Failed to connect to the python: {}", e),
