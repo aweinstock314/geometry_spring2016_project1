@@ -96,6 +96,35 @@ fn append_path_to_buf<S: SurfaceCurve>(v: &mut Vec<Vertex3d>, r: &S, t0: f32, t1
     }
 }
 
+fn append_surface_to_buf<F: Fn(f32, f32) -> [[f32; 3]; 2]>(buf: &mut Vec<Vertex3d>, sigma: F, u0: f32, v0: f32, u1: f32, v1: f32, delta: f32) {
+    let f = |u,v| {
+        let res = sigma(u,v);
+        Vertex3d {
+            position: res[0].into(),
+            vcolor: res[1],
+        }
+    };
+    let pushquad = |buf: &mut Vec<Vertex3d>, a, b, c, d| {
+        /*
+        a---b
+        | / |
+        |/  |
+        d---c
+        */
+        buf.push(a); buf.push(b); buf.push(d);
+        buf.push(b); buf.push(c); buf.push(d);
+    };
+    let mut v = v0;
+    while v < v1 {
+        let mut u = u0;
+        while u < u1 {
+            pushquad(buf, f(u,v), f(u1.min(u+delta), v), f(u1.min(u+delta), v1.min(v+delta)), f(u, v1.min(v+delta)));
+            u += delta;
+        }
+        v += delta;
+    }
+}
+
 trait SurfaceCurve {
     fn r(&self, t: f32) -> Point3<f32>;
     fn r1(&self, t: f32) -> Point3<f32>;
@@ -240,6 +269,17 @@ fn main() {
     //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
     //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_y(), [0.0, 1.0, 0.0]));
     //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
+
+    // from "Elemental Differential Geometry, 2nd Edition" 4.1.4
+    let sphere_patch = |theta: f32, phi: f32| {
+        let radius = 3.0;
+        let (x,y,z) = (radius*theta.cos()*phi.cos(), radius*theta.cos()*phi.sin(), radius*theta.sin());
+        //println!("{}, {}, {}", x, y, z);
+        let color = [y.abs() / radius, 0.5, 0.0];
+        //let color = [1.0, 0.0, 0.0];
+        [[x,y,z],color]
+    };
+    append_surface_to_buf(&mut mutable_buffer, sphere_patch, -TAU/4.0, 0.0, TAU/4.0, TAU, 0.2);
 
     // hack due to borrowck issues using a lambda
     let v = (1.0, 0.0, 0.0).into();
