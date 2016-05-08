@@ -7,4 +7,5 @@ authors = ["Avi Weinstock <aweinstock314@gmail.com>"]
 cgmath = "0.7.0"
 glium = "0.13.5"
 hyper = "0.7.2"
+rand = "0.3.14"
 serde_json = "0.7.0"

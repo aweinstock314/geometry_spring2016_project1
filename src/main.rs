@@ -2,16 +2,19 @@
 extern crate cgmath;
 extern crate hyper;
 extern crate serde_json;
+extern crate rand;
 
 use cgmath::{Basis3, Matrix3, Matrix4, Point3, Vector3, rad};
 use cgmath::{EuclideanVector, Point, Rotation, Rotation3, SquareMatrix};
 use glium::glutin::{Event, ElementState, VirtualKeyCode};
 use glium::{DisplayBuild, Surface};
 use hyper::client::Client;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::f32::consts::PI;
 use std::time::Duration;
+use rand::{Isaac64Rng,Rng,SeedableRng};
+use rand::distributions::{IndependentSample, Range};
 
 const EPSILON: f32 = 0.0001;
 const TAU: f32 = 2.0 * PI;
@@ -96,8 +99,8 @@ fn append_path_to_buf<S: SurfaceCurve>(v: &mut Vec<Vertex3d>, r: &S, t0: f32, t1
     }
 }
 
-fn append_surface_to_buf<F: Fn(f32, f32) -> [[f32; 3]; 2]>(buf: &mut Vec<Vertex3d>, sigma: F, u0: f32, v0: f32, u1: f32, v1: f32, delta: f32) {
-    let f = |u,v| {
+fn append_surface_to_buf<F: FnMut(f32, f32) -> [[f32; 3]; 2]>(buf: &mut Vec<Vertex3d>, mut sigma: F, u0: f32, v0: f32, u1: f32, v1: f32, delta: f32) {
+    let mut f = |u,v| {
         let res = sigma(u,v);
         Vertex3d {
             position: res[0].into(),
@@ -226,6 +229,46 @@ fn static_curve_over_http(host: &str, curve_id: usize, t0: f32, t1: f32, dt: f32
     })
 }
 
+struct PerlinNoiseSurface {
+    width: usize,
+    height: usize,
+    spacewidth: f32,
+    spaceheight: f32,
+    points: HashMap<(usize, usize), f32>,
+}
+
+impl PerlinNoiseSurface {
+    fn new(width: usize, height: usize, spacewidth: f32, spaceheight: f32) -> PerlinNoiseSurface {
+        let mut rng = Isaac64Rng::from_seed(&[42]);
+
+        let mut points = HashMap::new();
+        for i in 0..width {
+            for j in 0..height {
+                // TODO: actual perlin noise (currently just a heightmap of random points)
+                points.insert((i,j), Range::new(0.0, 5.0).ind_sample(&mut rng));
+            }
+        }
+
+        PerlinNoiseSurface {
+            width: width, height: height,
+            spacewidth: spacewidth, spaceheight: spaceheight,
+            points: points,
+        }
+    }
+    fn sample(&self, u: f32, v: f32) -> [f32; 3] {
+        if u < 0.0 || u >= self.spacewidth || v < 0.0 || v >= self.spaceheight {
+            return [u, 0.0, v];
+        }
+        //let linear_interpolate = |alpha, p0, p1| { (1.0 - alpha) * p0 + alpha * p1 };
+        let i = ((u / self.spacewidth) * self.width as f32) as usize;
+        let j = ((v / self.spaceheight) * self.height as f32) as usize;
+        if i + 1 >= self.width || j + 1 >= self.height {
+            return [u, 0.0, v];
+        }
+        [u, self.points[&(i,j)], v]
+    }
+}
+
 fn main() {
     let display = glium::glutin::WindowBuilder::new()
         .with_dimensions(640, 480)
@@ -271,7 +314,7 @@ fn main() {
     //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_z(), [0.0, 0.0, 1.0]));
 
     // from "Elemental Differential Geometry, 2nd Edition" 4.1.4
-    let sphere_patch = |theta: f32, phi: f32| {
+    /*let sphere_patch = |theta: f32, phi: f32| {
         let radius = 3.0;
         let (x,y,z) = (radius*theta.cos()*phi.cos(), radius*theta.cos()*phi.sin(), radius*theta.sin());
         //println!("{}, {}, {}", x, y, z);
@@ -279,7 +322,18 @@ fn main() {
         //let color = [1.0, 0.0, 0.0];
         [[x,y,z],color]
     };
-    append_surface_to_buf(&mut mutable_buffer, sphere_patch, -TAU/4.0, 0.0, TAU/4.0, TAU, 0.2);
+    append_surface_to_buf(&mut mutable_buffer, sphere_patch, -TAU/4.0, 0.0, TAU/4.0, TAU, 0.2);*/
+
+    let perlin_noise = PerlinNoiseSurface::new(10, 10, 10.0, 10.0);
+    let mut perlin_rng = rand::thread_rng();
+    let perlin_patch = |u,v| {
+        let pt = perlin_noise.sample(u,v);
+        //let col = [1.0, 1.0, 0.0];
+        let r = Range::new(0.0, 1.0);
+        let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
+        [pt, col]
+    };
+    append_surface_to_buf(&mut mutable_buffer, perlin_patch, -0.3, -0.3, 10.0, 10.0, 0.2);
 
     // hack due to borrowck issues using a lambda
     let v = (1.0, 0.0, 0.0).into();
