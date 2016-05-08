@@ -229,6 +229,19 @@ fn static_curve_over_http(host: &str, curve_id: usize, t0: f32, t1: f32, dt: f32
     })
 }
 
+fn bernstein_polynomial(d: usize, i: usize, x: f32) -> f32 {
+    fn factorial(n: usize) -> usize {
+        let mut tmp = 1;
+        for i in 2..n { tmp *= i; }
+        tmp
+    }
+    fn combination(n: usize, k: usize) -> usize {
+        factorial(n) / (factorial(n-k) * factorial(k))
+    }
+    // B_i^d(t) = \choose{d}{i}(1-t)^{d-i}t^i
+    (combination(d, i) as f32) * ((1.0-x).powi((d-i) as i32)) * x.powi(i as i32)
+}
+
 struct PerlinNoiseSurface {
     width: usize,
     height: usize,
@@ -262,10 +275,22 @@ impl PerlinNoiseSurface {
         //let linear_interpolate = |alpha, p0, p1| { (1.0 - alpha) * p0 + alpha * p1 };
         let i = ((u / self.spacewidth) * self.width as f32) as usize;
         let j = ((v / self.spaceheight) * self.height as f32) as usize;
-        if i + 1 >= self.width || j + 1 >= self.height {
+        let degree = 2;
+        if i + degree >= self.width || j + degree >= self.height {
             return [u, 0.0, v];
         }
-        [u, self.points[&(i,j)], v]
+        // B(u,v) = \Sigma_{i=0}^r\Sigma_{j=0}^s(b_{i,j}B_i^r(u)B_j^s(v)
+        let mut tmp = 0.0;
+        let uprime = u % (u / self.spacewidth);
+        let vprime = v % (v / self.spaceheight);
+        //println!("({}, {}) ({}, {}) ({}, {})", i, j, u, v, uprime, vprime);
+        for di in 0..(degree+1) {
+            for dj in 0..(degree+1) {
+                tmp += self.points[&(i+di, j+dj)] * bernstein_polynomial(degree, di, uprime) * bernstein_polynomial(degree, dj, vprime);
+            }
+        }
+        //[u, self.points[&(i,j)], v]
+        [u, tmp, v]
     }
 }
 
