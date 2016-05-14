@@ -278,15 +278,19 @@ impl PerlinNoiseSurface {
         //let linear_interpolate = |alpha, p0, p1| { (1.0 - alpha) * p0 + alpha * p1 };
         let i = ((u / self.spacewidth) * self.width as f32) as usize;
         let j = ((v / self.spaceheight) * self.height as f32) as usize;
-        let degree = 2;
+        let degree = 3;
         // B(u,v) = \Sigma_{i=0}^r\Sigma_{j=0}^s(b_{i,j}B_i^r(u)B_j^s(v)
         let mut tmp = 0.0;
-        let uprime = u % (u / self.spacewidth);
-        let vprime = v % (v / self.spaceheight);
+        let uprime = u % (self.spacewidth / self.width as f32);
+        let vprime = v % (self.spaceheight / self.height as f32);
         //println!("({}, {}) ({}, {}) ({}, {})", i, j, u, v, uprime, vprime);
         for di in 0..(degree+1) {
             for dj in 0..(degree+1) {
-                tmp += self.extended_discrete_lookup(i+di, j+dj) * bernstein_polynomial(degree, di, uprime) * bernstein_polynomial(degree, dj, vprime);
+                let iprime = (i+di).wrapping_sub(degree/2);
+                let jprime = (j+dj).wrapping_sub(degree/2);
+                tmp += self.extended_discrete_lookup(iprime, jprime)
+                        * bernstein_polynomial(degree, di, uprime)
+                        * bernstein_polynomial(degree, dj, vprime);
             }
         }
         //[u, self.points[&(i,j)], v]
@@ -363,7 +367,7 @@ fn main() {
         let size = 10;
         let spacesize = 10.0;
         let fringe = 0.3;
-        let delta = 0.2;
+        let delta = 0.1;
         let translation = 2.5;
         let perlin_noise = PerlinNoiseSurface::new(size, size, spacesize, spacesize);
         let mut perlin_rng = rand::thread_rng();
@@ -371,7 +375,8 @@ fn main() {
             let pt = perlin_noise.sample(u, v);
             //let col = [1.0, 1.0, 0.0];
             let r = Range::new(0.0, 1.0);
-            let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
+            //let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
+            let col = [u % (spacesize / size as f32), v % (spacesize / size as f32), 0.5];
             let translated_pt = [pt[0] + translation, pt[1], pt[2] + translation];
             [translated_pt, col]
         };
