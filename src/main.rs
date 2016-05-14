@@ -242,7 +242,7 @@ fn bernstein_polynomial(d: usize, i: usize, x: f32) -> f32 {
     (combination(d, i) as f32) * ((1.0-x).powi((d-i) as i32)) * x.powi(i as i32)
 }
 
-struct PerlinNoiseSurface {
+struct HeightMapSurface {
     width: usize,
     height: usize,
     spacewidth: f32,
@@ -250,19 +250,18 @@ struct PerlinNoiseSurface {
     points: HashMap<(usize, usize), f32>,
 }
 
-impl PerlinNoiseSurface {
-    fn new(width: usize, height: usize, spacewidth: f32, spaceheight: f32) -> PerlinNoiseSurface {
+impl HeightMapSurface {
+    fn new_noise(width: usize, height: usize, spacewidth: f32, spaceheight: f32) -> HeightMapSurface {
         let mut rng = Isaac64Rng::from_seed(&[42]);
 
         let mut points = HashMap::new();
         for i in 0..width {
             for j in 0..height {
-                // TODO: actual perlin noise (currently just a heightmap of random points)
                 points.insert((i,j), Range::new(0.0, 5.0).ind_sample(&mut rng));
             }
         }
 
-        PerlinNoiseSurface {
+        HeightMapSurface {
             width: width, height: height,
             spacewidth: spacewidth, spaceheight: spaceheight,
             points: points,
@@ -275,7 +274,7 @@ impl PerlinNoiseSurface {
         if u < 0.0 || u >= self.spacewidth || v < 0.0 || v >= self.spaceheight {
             return [u, 0.0, v];
         }
-        //let linear_interpolate = |alpha, p0, p1| { (1.0 - alpha) * p0 + alpha * p1 };
+        // let linear_interpolate = |alpha, p0, p1| { (1.0 - alpha) * p0 + alpha * p1 };
         let i = ((u / self.spacewidth) * self.width as f32) as usize;
         let j = ((v / self.spaceheight) * self.height as f32) as usize;
         let degree = 3;
@@ -369,18 +368,17 @@ fn main() {
         let fringe = 0.3;
         let delta = 0.1;
         let translation = 2.5;
-        let perlin_noise = PerlinNoiseSurface::new(size, size, spacesize, spacesize);
-        let mut perlin_rng = rand::thread_rng();
-        let perlin_patch = |u,v| {
-            let pt = perlin_noise.sample(u, v);
-            //let col = [1.0, 1.0, 0.0];
-            let r = Range::new(0.0, 1.0);
-            //let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
+        let surface = HeightMapSurface::new_noise(size, size, spacesize, spacesize);
+        //let mut color_rng = rand::thread_rng();
+        let surface_patch = |u,v| {
+            let pt = surface.sample(u, v);
+            //let r = Range::new(0.0, 1.0);
+            //let col = [r.ind_sample(&mut color_rng), r.ind_sample(&mut color_rng), r.ind_sample(&mut color_rng)];
             let col = [u % (spacesize / size as f32), v % (spacesize / size as f32), 0.5];
             let translated_pt = [pt[0] + translation, pt[1], pt[2] + translation];
             [translated_pt, col]
         };
-        append_surface_to_buf(&mut mutable_buffer, perlin_patch, -fringe, -fringe, spacesize+fringe, spacesize+fringe, delta);
+        append_surface_to_buf(&mut mutable_buffer, surface_patch, -fringe, -fringe, spacesize+fringe, spacesize+fringe, delta);
     }
 
     // hack due to borrowck issues using a lambda
