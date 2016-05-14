@@ -268,6 +268,9 @@ impl PerlinNoiseSurface {
             points: points,
         }
     }
+    fn extended_discrete_lookup(&self, i: usize, j: usize) -> f32 {
+        *self.points.get(&(i,j)).unwrap_or(&0.0)
+    }
     fn sample(&self, u: f32, v: f32) -> [f32; 3] {
         if u < 0.0 || u >= self.spacewidth || v < 0.0 || v >= self.spaceheight {
             return [u, 0.0, v];
@@ -276,9 +279,6 @@ impl PerlinNoiseSurface {
         let i = ((u / self.spacewidth) * self.width as f32) as usize;
         let j = ((v / self.spaceheight) * self.height as f32) as usize;
         let degree = 2;
-        if i + degree >= self.width || j + degree >= self.height {
-            return [u, 0.0, v];
-        }
         // B(u,v) = \Sigma_{i=0}^r\Sigma_{j=0}^s(b_{i,j}B_i^r(u)B_j^s(v)
         let mut tmp = 0.0;
         let uprime = u % (u / self.spacewidth);
@@ -286,7 +286,7 @@ impl PerlinNoiseSurface {
         //println!("({}, {}) ({}, {}) ({}, {})", i, j, u, v, uprime, vprime);
         for di in 0..(degree+1) {
             for dj in 0..(degree+1) {
-                tmp += self.points[&(i+di, j+dj)] * bernstein_polynomial(degree, di, uprime) * bernstein_polynomial(degree, dj, vprime);
+                tmp += self.extended_discrete_lookup(i+di, j+dj) * bernstein_polynomial(degree, di, uprime) * bernstein_polynomial(degree, dj, vprime);
             }
         }
         //[u, self.points[&(i,j)], v]
@@ -340,8 +340,8 @@ fn main() {
     let (mut theta, mut phi) = (0.0, 0.0);
 
     let mut held_keys = HashSet::new();
-    let movement_delta = 0.05;
-    let rotation_delta = 0.01;
+    let movement_delta = 0.075;
+    let rotation_delta = 0.02;
 
     let mut mutable_buffer = vec![];
     //mutable_buffer.extend_from_slice(&triangle_normal_to_vector(Vector3::unit_x(), [1.0, 0.0, 0.0]));
@@ -362,6 +362,7 @@ fn main() {
     {
         let size = 10;
         let spacesize = 10.0;
+        let fringe = 0.3;
         let delta = 0.2;
         let translation = 2.5;
         let perlin_noise = PerlinNoiseSurface::new(size, size, spacesize, spacesize);
@@ -374,7 +375,7 @@ fn main() {
             let translated_pt = [pt[0] + translation, pt[1], pt[2] + translation];
             [translated_pt, col]
         };
-        append_surface_to_buf(&mut mutable_buffer, perlin_patch, -0.3, -0.3, spacesize, spacesize, delta);
+        append_surface_to_buf(&mut mutable_buffer, perlin_patch, -fringe, -fringe, spacesize+fringe, spacesize+fringe, delta);
     }
 
     // hack due to borrowck issues using a lambda
