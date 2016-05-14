@@ -298,8 +298,18 @@ fn main() {
     let display = glium::glutin::WindowBuilder::new()
         .with_dimensions(640, 480)
         .with_title("Fun with Frenet Frames".to_string())
+        .with_depth_buffer(24)
         .build_glium()
         .expect("Failed to initialize window.");
+
+    let draw_params = glium::DrawParameters {
+        depth: glium::Depth {
+            test: glium::draw_parameters::DepthTest::IfLess,
+            write: true,
+            .. Default::default()
+        },
+        .. Default::default()
+    };
 
     let mut t = 0.0;
     let mut delta = 0.001;
@@ -349,16 +359,23 @@ fn main() {
     };
     append_surface_to_buf(&mut mutable_buffer, sphere_patch, -TAU/4.0, 0.0, TAU/4.0, TAU, 0.2);*/
 
-    let perlin_noise = PerlinNoiseSurface::new(10, 10, 10.0, 10.0);
-    let mut perlin_rng = rand::thread_rng();
-    let perlin_patch = |u,v| {
-        let pt = perlin_noise.sample(u,v);
-        //let col = [1.0, 1.0, 0.0];
-        let r = Range::new(0.0, 1.0);
-        let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
-        [pt, col]
-    };
-    append_surface_to_buf(&mut mutable_buffer, perlin_patch, -0.3, -0.3, 10.0, 10.0, 0.2);
+    {
+        let size = 10;
+        let spacesize = 10.0;
+        let delta = 0.2;
+        let translation = 2.5;
+        let perlin_noise = PerlinNoiseSurface::new(size, size, spacesize, spacesize);
+        let mut perlin_rng = rand::thread_rng();
+        let perlin_patch = |u,v| {
+            let pt = perlin_noise.sample(u, v);
+            //let col = [1.0, 1.0, 0.0];
+            let r = Range::new(0.0, 1.0);
+            let col = [r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng), r.ind_sample(&mut perlin_rng)];
+            let translated_pt = [pt[0] + translation, pt[1], pt[2] + translation];
+            [translated_pt, col]
+        };
+        append_surface_to_buf(&mut mutable_buffer, perlin_patch, -0.3, -0.3, spacesize, spacesize, delta);
+    }
 
     // hack due to borrowck issues using a lambda
     let v = (1.0, 0.0, 0.0).into();
@@ -415,7 +432,7 @@ fn main() {
             delta = -delta;
         }
         let mut frame = display.draw();
-        frame.clear_color(0.0, 0.0, 0.0, 1.0);
+        frame.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
         let perspective = Matrix4::<f32>::from({
             let (width, height) = frame.get_dimensions();
             cgmath::PerspectiveFov {
@@ -429,7 +446,7 @@ fn main() {
         let rotation: Matrix4<f32> = (Matrix3::from_angle_x(rad(theta)) * Matrix3::from_angle_y(rad(phi))).into();
         let matrix: [[f32; 4]; 4] = (perspective * rotation * translation).into();
         let uniforms = uniform! { matrix: matrix };
-        frame.draw(&vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
+        frame.draw(&vertex_buffer, &indices, &program, &uniforms, &draw_params).unwrap();
         frame.finish().unwrap();
 
         std::thread::sleep(Duration::from_millis(1));
